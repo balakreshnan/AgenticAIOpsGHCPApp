@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .agents import get_agent, run_agent
-from .config import require_settings
+from .config import ensure_utf8_streams, require_settings
 
 AGENT_NAME = "rfpagent"
 
@@ -239,6 +239,10 @@ def run_redteam(
     credential drives the Foundry upload (``skip_upload=False``).
     """
     from azure.identity import DefaultAzureCredential
+
+    # The red-team SDK logs emoji-laden progress; ensure the console can encode
+    # it (Windows defaults to cp1252 and would otherwise raise UnicodeEncodeError).
+    ensure_utf8_streams()
 
     cats = list(risk_categories or DEFAULT_RISK_CATEGORIES)
     strats = list(strategies or DEFAULT_STRATEGIES)

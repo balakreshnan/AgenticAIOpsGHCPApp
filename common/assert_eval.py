@@ -440,9 +440,23 @@ def run_assert(
     run_root = suite_root / run_id
 
     if proc.returncode != 0 and not (run_root / "scores.jsonl").exists():
+        from .errors import readable_content_filter
+
         run.error = (
             f"ASSERT pipeline failed (exit {proc.returncode}). See log for details."
         )
+        # If the failure was a content-filter block, explain it in plain language.
+        readable = readable_content_filter(log_tail)
+        if readable:
+            run.error = (
+                "ASSERT pipeline stopped because a request was blocked by Azure "
+                "OpenAI's content safety filter.\n\n"
+                f"{readable}\n\n"
+                "This usually means a generated test prompt was adversarial. The "
+                "agent target now returns a readable 'blocked' response instead of "
+                "failing, so rerunning should let the pipeline complete and record "
+                "the refusal as a test result."
+            )
         run.log_tail = log_tail
         run.duration_s = round(time.perf_counter() - started, 1)
         return run

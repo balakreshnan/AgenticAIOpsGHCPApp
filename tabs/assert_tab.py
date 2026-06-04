@@ -16,6 +16,7 @@ import streamlit as st
 
 from common import assert_eval as ae
 from common.config import ConfigError, require_settings
+from common.errors import CONTENT_FILTER_MARKER
 from common.ui import config_error
 
 _STATE_KEY = "assert_run"
@@ -59,6 +60,8 @@ def _render_records(run: "ae.AssertRun") -> None:
         title = rec.title or rec.test_case_id or f"Case {i}"
         flags = [n for n, v in rec.dimensions.items() if v]
         summary = f"{_verdict_badge(rec.passed)} &nbsp; **{i}. {title}**"
+        if rec.response.startswith(CONTENT_FILTER_MARKER):
+            summary += " &nbsp; :orange-badge[🛡 content filtered]"
         if flags:
             summary += " &nbsp; — " + ", ".join(f.replace("_", " ") for f in flags)
         st.markdown(summary, unsafe_allow_html=True)
@@ -68,7 +71,15 @@ def _render_records(run: "ae.AssertRun") -> None:
             st.markdown("**Prompt**")
             st.markdown(f"> {rec.prompt or '_(none)_'}")
             st.markdown("**Agent response**")
-            if rec.response:
+            if rec.response and rec.response.startswith(CONTENT_FILTER_MARKER):
+                detail = rec.response[len(CONTENT_FILTER_MARKER):].strip()
+                st.markdown(":orange-badge[🛡 Blocked by content safety filter]")
+                st.info(
+                    detail
+                    or "The agent's safety system refused this prompt before "
+                    "it reached the model."
+                )
+            elif rec.response:
                 st.markdown(rec.response)
             else:
                 st.caption("No response captured.")
