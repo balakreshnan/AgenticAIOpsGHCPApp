@@ -8,6 +8,7 @@ parsed once per Streamlit session.
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from functools import lru_cache
 
@@ -16,6 +17,67 @@ from dotenv import load_dotenv
 # Load .env once at import time. ``override=False`` keeps real environment
 # variables (e.g. those injected by a host) authoritative over the file.
 load_dotenv(override=False)
+
+
+def ensure_utf8_streams() -> None:
+    """Make all log output UTF-8 so emoji never crash the app on Windows.
+
+    Several SDKs (notably the Azure AI Evaluation **red-team** scanner) log
+    progress messages containing emoji such as ``🚀``. On Windows two things
+    default to the legacy cp1252 ("charmap") codec, which cannot encode those
+    characters and raises ``UnicodeEncodeError`` mid-scan:
+
+    1. **The standard streams** (``stdout`` / ``stderr``) used by console log
+       handlers — reconfigured to UTF-8 below.
+    2. **`logging.FileHandler`** opened without an explicit ``encoding`` (the
+       red-team logger writes a DEBUG ``redteam.log`` this way). We patch the
+       handler so it defaults to UTF-8 instead of the locale encoding.
+
+    Both are best-effort and idempotent — safe to call on every app start.
+    """
+    for name in ("stdout", "stderr", "__stdout__", "__stderr__"):
+        stream = getattr(sys, name, None)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if not callable(reconfigure):
+            continue
+        encoding = (getattr(stream, "encoding", "") or "").lower()
+        if encoding in ("utf-8", "utf8"):
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="backslashreplace")
+        except (ValueError, OSError, RuntimeError):
+            # Stream already detached / not a TextIOWrapper — nothing we can do.
+            pass
+
+    _patch_file_handler_utf8()
+
+
+def _patch_file_handler_utf8() -> None:
+    """Default ``logging.FileHandler`` to UTF-8 when no encoding is given.
+
+    Third-party loggers (e.g. the red-team scanner's ``redteam.log``) create a
+    DEBUG file handler with no ``encoding``, which on Windows falls back to
+    cp1252 and crashes when an emoji is logged. Patching the constructor's
+    default is the only way to fix that without editing the SDK. Idempotent.
+    """
+    import logging
+
+    if getattr(logging.FileHandler, "_utf8_patched", False):
+        return
+
+    original_init = logging.FileHandler.__init__
+
+    def init(self, filename, mode="a", encoding=None, delay=False, errors=None):
+        if encoding is None:
+            encoding = "utf-8"
+        if errors is None:
+            errors = "backslashreplace"
+        original_init(
+            self, filename, mode=mode, encoding=encoding, delay=delay, errors=errors
+        )
+
+    logging.FileHandler.__init__ = init  # type: ignore[method-assign]
+    logging.FileHandler._utf8_patched = True  # type: ignore[attr-defined]
 
 
 class ConfigError(RuntimeError):

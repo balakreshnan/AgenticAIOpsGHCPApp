@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from common.config import ensure_utf8_streams
 from common.styles import inject_theme
 from common.ui import app_header
 from tabs import (
@@ -17,6 +18,10 @@ from tabs import (
     redteam_tab,
     tracing_tab,
 )
+
+# Make stdout/stderr UTF-8 before any SDK logs emoji (e.g. the red-team scanner),
+# so Windows' cp1252 console codec can't crash a run with UnicodeEncodeError.
+ensure_utf8_streams()
 
 st.set_page_config(
     page_title="Agentic AIOps Studio",
