@@ -22,6 +22,9 @@ eval_results/
 # ASSERT (assert_ai) local artifacts
 .assert_work/
 
+# Red Team (PyRIT) local scan artifacts
+.redteam_work/
+
 # OS / editor
 .DS_Store
 .vscode/
