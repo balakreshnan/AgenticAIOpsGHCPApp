@@ -35,6 +35,7 @@ class Settings:
     eval_dataset_path: str
     eval_agent_dataset_path: str
     assert_target_agent: str = "rfpagent"
+    governance_sponsor_email: str = "agent-owner@contoso.com"
     subscription_id: str = ""
     resource_group: str = ""
     project_name: str = ""
@@ -115,6 +116,8 @@ def get_settings() -> Settings:
         eval_dataset_path=eval_dataset_path,
         eval_agent_dataset_path=eval_agent_dataset_path,
         assert_target_agent=_clean(os.getenv("ASSERT_TARGET_AGENT")) or "rfpagent",
+        governance_sponsor_email=_clean(os.getenv("GOVERNANCE_SPONSOR_EMAIL"))
+        or "agent-owner@contoso.com",
         subscription_id=_clean(os.getenv("AZURE_SUBSCRIPTION_ID")) or "",
         resource_group=_clean(os.getenv("AZURE_RESOURCE_GROUP_NAME")) or "",
         project_name=_clean(os.getenv("AZURE_AI_PROJECT_NAME")) or "",

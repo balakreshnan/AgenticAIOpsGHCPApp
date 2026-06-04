@@ -5,4 +5,5 @@ agent-framework>=1.0.0
 agent-framework-foundry>=1.0.0
 azure-ai-evaluation>=1.17
 assert-ai>=0.1.0
+agent-governance-toolkit[full]==4.0.0
 python-dotenv>=1.0

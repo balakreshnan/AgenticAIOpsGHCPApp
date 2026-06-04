@@ -49,12 +49,39 @@ class AgentRunResult:
     error: str | None = None
 
 
+@dataclass(frozen=True)
+class AgentDefinition:
+    """The resolved definition of a hosted agent (instructions + model)."""
+
+    name: str
+    instructions: str = ""
+    model: str = ""
+    version: str = ""
+
+
 def _first_attr(obj: Any, names: tuple[str, ...], default: Any = "") -> Any:
     for name in names:
         value = getattr(obj, name, None)
         if value:
             return value
     return default
+
+
+def _nav(obj: Any, key: str) -> Any:
+    """Read ``key`` from a mapping-like or attribute-bearing SDK object."""
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return obj.get(key)
+    getter = getattr(obj, "get", None)
+    if callable(getter):
+        try:
+            value = getter(key)
+            if value is not None:
+                return value
+        except Exception:
+            pass
+    return getattr(obj, key, None)
 
 
 def _model_from_versions(raw: Any) -> str:
@@ -109,6 +136,65 @@ def list_foundry_agents() -> list[AgentInfo]:
             )
         )
     return agents
+
+
+def get_agent(agent_name: str) -> AgentInfo | None:
+    """Return the :class:`AgentInfo` for ``agent_name`` (case-insensitive)."""
+    wanted = (agent_name or "").strip().lower()
+    for agent in list_foundry_agents():
+        if agent.name.lower() == wanted or agent.id.lower() == wanted:
+            return agent
+    return None
+
+
+def _latest_version(raw: Any) -> Any:
+    versions = _nav(raw, "versions")
+    if versions is None:
+        return None
+    return (
+        _nav(versions, "latest")
+        or _nav(versions, "current")
+        or versions
+    )
+
+
+def get_agent_instructions(agent_name: str) -> AgentDefinition:
+    """Fetch the hosted agent's system instructions, model and version.
+
+    Reads the live definition from the Foundry project (``client.agents.get``
+    with a fallback to scanning ``list``). Used by the Governance tab to run a
+    static prompt-defense scan against the agent's actual system prompt.
+    """
+    from .azure_clients import get_project_client
+
+    client = get_project_client()
+    raw = None
+    getter = getattr(client.agents, "get", None)
+    if callable(getter):
+        try:
+            raw = getter(agent_name)
+        except Exception:
+            raw = None
+    if raw is None:
+        for item in client.agents.list():
+            name = str(_first_attr(item, ("name", "display_name"), ""))
+            if name.lower() == agent_name.lower():
+                raw = item
+                break
+    if raw is None:
+        raise RuntimeError(
+            f"Agent '{agent_name}' was not found in the Foundry project."
+        )
+
+    latest = _latest_version(raw)
+    definition = _nav(latest, "definition") or {}
+    instructions = str(_nav(definition, "instructions") or "")
+    model = str(_nav(definition, "model") or "")
+    version = str(_nav(latest, "version") or "")
+    name = str(_nav(raw, "name") or agent_name)
+    return AgentDefinition(
+        name=name, instructions=instructions, model=model, version=version
+    )
 
 
 def _to_messages(history: list[dict[str, str]], question: str) -> list[Any]:
