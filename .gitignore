@@ -1,0 +1,28 @@
+# Environment
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.python-version
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Azure AI Evaluation local artifacts
+.promptflow/
+*.evaluation.jsonl
+eval_results/
+
+# ASSERT (assert_ai) local artifacts
+.assert_work/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
