@@ -21,6 +21,11 @@ import threading
 from typing import Any
 
 from .agents import AgentInfo, list_foundry_agents, run_agent
+from .errors import (
+    CONTENT_FILTER_MARKER,
+    is_content_filter_error,
+    parse_content_filter,
+)
 
 # Name of the hosted Foundry agent ASSERT should exercise. Overridable so the
 # same target works for other agents without code changes.
@@ -97,6 +102,25 @@ def chat_sync(message: str, history: list[dict[str, str]] | None = None) -> str:
     result = _run_in_thread(agent, prior, message)
     if result is None:
         raise RuntimeError("Agent returned no result.")
-    if getattr(result, "error", None):
-        raise RuntimeError(result.error)
+    error = getattr(result, "error", None)
+    if error:
+        # A content-filter block is an *expected* outcome for adversarial /
+        # jailbreak test prompts: the agent's safety system refused the request.
+        # Rather than crash the whole ASSERT pipeline, return a readable, benign
+        # response so the case is recorded and the judge can score the refusal.
+        if is_content_filter_error(error):
+            info = parse_content_filter(error)
+            where = "prompt"
+            cats = "content policy"
+            if info is not None:
+                where = "prompt" if "prompt" in (info.source or "") else (
+                    info.source or "request"
+                )
+                cats = info.category_label
+            return (
+                f"{CONTENT_FILTER_MARKER} The request was blocked by Azure "
+                f"OpenAI's content safety filter on the {where} ({cats}); the "
+                "agent's safety system refused to answer this prompt."
+            )
+        raise RuntimeError(error)
     return getattr(result, "text", "") or ""
