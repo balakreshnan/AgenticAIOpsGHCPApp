@@ -16,7 +16,8 @@ from common import evaluation as ev
 from common.config import ConfigError, require_settings
 from common.ui import config_error, render_metric_cards
 
-_STATE_KEY = "eval_run"
+_STATE_KEY_MODEL = "eval_run_model"
+_STATE_KEY_AGENT = "eval_run_agent"
 
 
 def _row_to_record(row: dict[str, Any]) -> dict[str, Any]:
@@ -35,14 +36,14 @@ def _row_to_record(row: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
-def _render_results(run: "ev.EvalRun") -> None:
+def _render_results(run: "ev.EvalRun", key_prefix: str = "") -> None:
     if run.error:
         st.error(f"**Evaluation failed.**\n\n{run.error}")
 
     if run.skipped:
-        with st.expander(f"⚠️ Skipped evaluators ({len(run.skipped)})", expanded=False):
-            for name, reason in run.skipped:
-                st.markdown(f"- **{name}** — {reason}")
+        st.warning(f"**Skipped evaluators ({len(run.skipped)})**")
+        for name, reason in run.skipped:
+            st.markdown(f"- **{name}** — {reason}")
 
     if not run.metrics and not run.rows:
         return
@@ -59,47 +60,43 @@ def _render_results(run: "ev.EvalRun") -> None:
     st.markdown("#### Aggregate metrics")
     render_metric_cards(run.metrics)
 
-    with st.expander("📊 All aggregate metrics", expanded=False):
-        st.json(
-            {k: round(v, 4) for k, v in sorted(run.metrics.items())
-             if isinstance(v, (int, float)) and not isinstance(v, bool)},
-            expanded=True,
-        )
+    numeric_metrics = {
+        k: round(v, 4)
+        for k, v in sorted(run.metrics.items())
+        if isinstance(v, (int, float)) and not isinstance(v, bool)
+    }
+    if st.checkbox(
+        "Show all aggregate metrics", key=f"{key_prefix}_all_metrics"
+    ):
+        st.json(numeric_metrics, expanded=True)
 
     if run.rows:
         st.markdown("#### Per-row results")
         records = [_row_to_record(r) for r in run.rows]
         st.dataframe(records, use_container_width=True, hide_index=False)
 
-        with st.expander("🔍 Row detail (inputs, outputs & reasons)", expanded=False):
+        if st.checkbox(
+            "Show row detail (inputs, outputs & reasons)",
+            key=f"{key_prefix}_row_detail",
+        ):
             for i, row in enumerate(run.rows, start=1):
                 st.markdown(f"**Row {i}**")
                 st.json(row, expanded=False)
 
 
-def render() -> None:
-    # ---- Configuration -----------------------------------------------------
-    try:
-        settings = require_settings()
-    except ConfigError as exc:
-        config_error(str(exc))
-        return
+def _dataset_name(path: str) -> str:
+    return path.replace("\\", "/").split("/")[-1]
 
+
+def _render_model_section(settings) -> None:
+    """Model evaluation: NLP, AI-assisted quality and risk & safety metrics."""
     safety_ready = bool(settings.project_endpoint)
-
-    # ---- Header / context --------------------------------------------------
-    dataset_name = settings.eval_dataset_path.replace("\\", "/").split("/")[-1]
-    info_cols = st.columns([2, 2, 3])
-    info_cols[0].markdown(f"**Agent**\n\n`{ev.AGENT_NAME}`")
-    info_cols[1].markdown(f"**Judge model**\n\n`{settings.judge_model}`")
-    info_cols[2].markdown(f"**Dataset**\n\n`{dataset_name}`")
-
     st.caption(
-        "Evaluates the responses captured for the **rfpagent** Foundry agent using "
-        "the Azure AI Evaluation SDK. Authentication uses DefaultAzureCredential."
+        f"Scores the **{ev.AGENT_NAME}** responses in "
+        f"`{_dataset_name(settings.eval_dataset_path)}` for text-quality and safety "
+        "(NLP overlap, LLM-judged quality, content-safety risk)."
     )
 
-    # ---- Controls ----------------------------------------------------------
     default_categories = list(ev.ALL_CATEGORIES)
     if not safety_ready:
         default_categories = [c for c in default_categories if c != ev.CATEGORY_SAFETY]
@@ -111,14 +108,19 @@ def render() -> None:
             options=list(ev.ALL_CATEGORIES),
             default=default_categories,
             help="\n".join(f"{c}: {ev.CATEGORY_HELP[c]}" for c in ev.ALL_CATEGORIES),
+            key="model_eval_categories",
         )
     with ctrl_cols[1]:
         st.write("")
         st.write("")
-        has_result = _STATE_KEY in st.session_state
-        label = "🔄 Rerun" if has_result else "▶ Run Evaluation"
+        has_result = _STATE_KEY_MODEL in st.session_state
+        label = "🔄 Rerun" if has_result else "▶ Run model eval"
         run_clicked = st.button(
-            label, type="primary", use_container_width=True, disabled=not categories
+            label,
+            type="primary",
+            use_container_width=True,
+            disabled=not categories,
+            key="model_eval_run",
         )
 
     if not safety_ready:
@@ -127,17 +129,75 @@ def render() -> None:
         )
 
     if run_clicked and categories:
-        with st.spinner("Running Azure AI evaluations… this can take a minute."):
-            st.session_state[_STATE_KEY] = ev.run_evaluation(tuple(categories))
+        with st.spinner("Running model evaluations… this can take a minute."):
+            st.session_state[_STATE_KEY_MODEL] = ev.run_evaluation(tuple(categories))
 
-    # ---- Results -----------------------------------------------------------
-    run = st.session_state.get(_STATE_KEY)
+    run = st.session_state.get(_STATE_KEY_MODEL)
     if run is None:
         st.info(
-            "Select one or more metric categories and click **Run Evaluation** to "
-            "score the rfpagent dataset across all available metrics."
+            "Select metric categories and click **Run model eval** to score the "
+            "rfpagent dataset across all available text-quality and safety metrics."
         )
         return
+    _render_results(run, key_prefix="model")
 
-    _render_results(run)
+
+def _render_agent_section(settings) -> None:
+    """Agent evaluation: intent resolution, tool-call accuracy, task adherence."""
+    st.caption(
+        f"Judges tool-using agent behaviour in "
+        f"`{_dataset_name(settings.eval_agent_dataset_path)}` — "
+        + ", ".join(ev.AGENT_METRIC_HELP.keys()).replace("_", " ")
+        + "."
+    )
+    for metric, desc in ev.AGENT_METRIC_HELP.items():
+        st.markdown(f"- **{metric.replace('_', ' ').title()}** — {desc}")
+
+    has_result = _STATE_KEY_AGENT in st.session_state
+    label = "🔄 Rerun" if has_result else "▶ Run agent eval"
+    run_clicked = st.button(
+        label, type="primary", use_container_width=False, key="agent_eval_run"
+    )
+
+    if run_clicked:
+        with st.spinner("Running agent evaluations… this can take a minute."):
+            st.session_state[_STATE_KEY_AGENT] = ev.run_agent_evaluation()
+
+    run = st.session_state.get(_STATE_KEY_AGENT)
+    if run is None:
+        st.info(
+            "Click **Run agent eval** to score the rfpagent agent on intent "
+            "resolution, tool-call accuracy and task adherence."
+        )
+        return
+    _render_results(run, key_prefix="agent")
+
+
+def render() -> None:
+    # ---- Configuration -----------------------------------------------------
+    try:
+        settings = require_settings()
+    except ConfigError as exc:
+        config_error(str(exc))
+        return
+
+    # ---- Header / context --------------------------------------------------
+    info_cols = st.columns([2, 2, 3])
+    info_cols[0].markdown(f"**Agent**\n\n`{ev.AGENT_NAME}`")
+    info_cols[1].markdown(f"**Judge model**\n\n`{settings.judge_model}`")
+    info_cols[2].markdown(
+        f"**Datasets**\n\n`{_dataset_name(settings.eval_dataset_path)}` · "
+        f"`{_dataset_name(settings.eval_agent_dataset_path)}`"
+    )
+    st.caption(
+        "Powered by the Azure AI Evaluation SDK. Authentication uses "
+        "DefaultAzureCredential."
+    )
+
+    # ---- Two separate evaluation sections ----------------------------------
+    with st.expander("🧪 Model Evaluation", expanded=True):
+        _render_model_section(settings)
+
+    with st.expander("🤖 Agent Evaluation", expanded=False):
+        _render_agent_section(settings)
 

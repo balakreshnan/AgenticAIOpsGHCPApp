@@ -41,6 +41,14 @@ CATEGORY_HELP = {
     CATEGORY_SAFETY: "Content-safety risk via the Azure AI RAI service.",
 }
 
+# Agent-evaluation metrics (run against ``datarfpagent.jsonl``). All are
+# AI-assisted and judge tool-using agent behaviour rather than raw text.
+AGENT_METRIC_HELP = {
+    "intent_resolution": "How well the agent identified and addressed the user's intent.",
+    "tool_call_accuracy": "Whether the agent called the right tools with correct parameters.",
+    "task_adherence": "How closely the agent followed the assigned task instructions.",
+}
+
 
 @dataclass
 class EvalRun:
@@ -206,16 +214,82 @@ def _count_rows(path: str) -> int:
         return 0
 
 
+def _execute(
+    run: EvalRun,
+    path: str,
+    evaluators: dict[str, Any],
+    config: dict[str, dict],
+    name: str,
+    azure_ai_project: str | None = None,
+) -> EvalRun:
+    """Run ``evaluate`` and fold the outcome into ``run``.
+
+    When ``azure_ai_project`` (the Foundry project endpoint) is provided the
+    results — metrics, per-row scores and traces — are uploaded to the Azure AI
+    Foundry project so the run is auditable and trackable in the portal. The
+    returned ``studio_url`` deep-links to that stored run.
+    """
+    from azure.ai.evaluation import evaluate
+
+    if not evaluators:
+        run.error = (
+            "No evaluators could be constructed. See the skipped list for details."
+        )
+        return run
+
+    started = time.perf_counter()
+    eval_kwargs: dict[str, Any] = dict(
+        data=path,
+        evaluators=evaluators,
+        evaluator_config=config,
+        evaluation_name=name,
+        fail_on_evaluator_errors=False,
+    )
+    if azure_ai_project:
+        # Upload metrics/rows/traces to the Foundry project for audit & tracking.
+        eval_kwargs["azure_ai_project"] = azure_ai_project
+        eval_kwargs["tags"] = {"agent": AGENT_NAME, "source": "agentic-aiops-studio"}
+
+    try:
+        result = evaluate(**eval_kwargs)
+    except Exception as exc:
+        # If the upload path fails, retry once locally so the user still gets
+        # scores instead of an empty result.
+        if azure_ai_project:
+            eval_kwargs.pop("azure_ai_project", None)
+            eval_kwargs.pop("tags", None)
+            try:
+                result = evaluate(**eval_kwargs)
+                run.error = (
+                    "Results computed locally but could NOT be uploaded to the "
+                    f"Foundry project: {type(exc).__name__}: {exc}"
+                )
+            except Exception as exc2:
+                run.error = f"{type(exc2).__name__}: {exc2}"
+                run.duration_s = round(time.perf_counter() - started, 2)
+                return run
+        else:
+            run.error = f"{type(exc).__name__}: {exc}"
+            run.duration_s = round(time.perf_counter() - started, 2)
+            return run
+
+    run.duration_s = round(time.perf_counter() - started, 2)
+    run.evaluators = list(evaluators.keys())
+    run.metrics = dict(result.get("metrics", {}) or {})
+    run.rows = list(result.get("rows", []) or [])
+    run.studio_url = result.get("studio_url")
+    return run
+
+
 def run_evaluation(
     categories: tuple[str, ...] = ALL_CATEGORIES,
     dataset_path: str | None = None,
 ) -> EvalRun:
-    """Run an evaluation batch and return a structured :class:`EvalRun`.
+    """Run a model-evaluation batch and return a structured :class:`EvalRun`.
 
     The credential is a synchronous ``DefaultAzureCredential``; the judge model
     authenticates via an AAD token provider derived from it.
     """
-    from azure.ai.evaluation import evaluate
     from azure.identity import DefaultAzureCredential
 
     settings = require_settings()
@@ -231,31 +305,125 @@ def run_evaluation(
         tuple(categories), settings, credential
     )
     run.skipped = skipped
+    return _execute(
+        run,
+        path,
+        evaluators,
+        config,
+        f"{AGENT_NAME}-model-eval",
+        azure_ai_project=settings.project_endpoint or None,
+    )
 
+
+def _normalize_agent_dataset(src_path: str) -> str:
+    """Wrap each row's ``response`` in a message list and write a temp JSONL.
+
+    The shipped ``datarfpagent.jsonl`` stores ``response`` as a single assistant
+    message object, but the agent evaluators expect a list of messages.
+    """
+    import json
+    import tempfile
+
+    out = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
+    )
+    with open(src_path, "r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            response = row.get("response")
+            if response is not None and not isinstance(response, list):
+                row["response"] = [response]
+            out.write(json.dumps(row) + "\n")
+    out.close()
+    return out.name
+
+
+def _build_agent_evaluators(
+    settings: Settings, credential: Any
+) -> tuple[dict[str, Any], dict[str, dict], list[tuple[str, str]]]:
+    """Instantiate the agent-behaviour evaluators + column mappings."""
+    import azure.ai.evaluation as ev
+
+    evaluators: dict[str, Any] = {}
+    config: dict[str, dict] = {}
+    skipped: list[tuple[str, str]] = []
+
+    if not settings.aoai_endpoint or not settings.judge_model:
+        skipped.append(
+            (
+                "agent",
+                "Judge model endpoint/deployment not configured "
+                "(set AZURE_OPENAI_ENDPOINT / AZURE_EVAL_JUDGE_MODEL).",
+            )
+        )
+        return evaluators, config, skipped
+
+    mc = _model_config(settings)
+    rk = {"is_reasoning_model": settings.judge_is_reasoning}
+    mapping = {
+        "column_mapping": {
+            "query": "${data.query}",
+            "response": "${data.response}",
+            "tool_definitions": "${data.tool_definitions}",
+        }
+    }
+    specs: list[tuple[str, Callable[[], Any]]] = [
+        ("intent_resolution", lambda: ev.IntentResolutionEvaluator(mc, credential=credential, **rk)),
+        ("tool_call_accuracy", lambda: ev.ToolCallAccuracyEvaluator(mc, credential=credential, **rk)),
+        ("task_adherence", lambda: ev.TaskAdherenceEvaluator(mc, credential=credential, **rk)),
+    ]
+    for name, factory in specs:
+        try:
+            evaluators[name] = factory()
+            config[name] = mapping
+        except Exception as exc:  # pragma: no cover - defensive
+            skipped.append((name, f"{type(exc).__name__}: {exc}"))
+    return evaluators, config, skipped
+
+
+def run_agent_evaluation(dataset_path: str | None = None) -> EvalRun:
+    """Evaluate tool-using agent behaviour against ``datarfpagent.jsonl``.
+
+    Runs intent resolution, tool-call accuracy and task adherence using the
+    judge model (DefaultAzureCredential / AAD).
+    """
+    import os
+
+    from azure.identity import DefaultAzureCredential
+
+    settings = require_settings()
+    src = dataset_path or settings.eval_agent_dataset_path
+    run = EvalRun(
+        judge_model=settings.judge_model,
+        dataset_path=src,
+        row_count=_count_rows(src),
+    )
+
+    credential = DefaultAzureCredential()
+    evaluators, config, skipped = _build_agent_evaluators(settings, credential)
+    run.skipped = skipped
     if not evaluators:
         run.error = (
-            "No evaluators could be constructed for the selected categories. "
-            "See the skipped list for details."
+            "No agent evaluators could be constructed. See the skipped list."
         )
         return run
 
-    started = time.perf_counter()
+    normalized = _normalize_agent_dataset(src)
     try:
-        result = evaluate(
-            data=path,
-            evaluators=evaluators,
-            evaluator_config=config,
-            evaluation_name=f"{AGENT_NAME}-eval",
-            fail_on_evaluator_errors=False,
+        _execute(
+            run,
+            normalized,
+            evaluators,
+            config,
+            f"{AGENT_NAME}-agent-eval",
+            azure_ai_project=settings.project_endpoint or None,
         )
-    except Exception as exc:
-        run.error = f"{type(exc).__name__}: {exc}"
-        run.duration_s = round(time.perf_counter() - started, 2)
-        return run
-
-    run.duration_s = round(time.perf_counter() - started, 2)
-    run.evaluators = list(evaluators.keys())
-    run.metrics = dict(result.get("metrics", {}) or {})
-    run.rows = list(result.get("rows", []) or [])
-    run.studio_url = result.get("studio_url")
+    finally:
+        try:
+            os.unlink(normalized)
+        except OSError:
+            pass
     return run
