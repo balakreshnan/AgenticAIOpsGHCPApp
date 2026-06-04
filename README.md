@@ -3,6 +3,10 @@ Agentic AI Ops using Microsoft Foundry, Microsoft Agent framework, Guardrails, E
 
 ## Agentic AIOps Studio (Streamlit)
 
+> 📖 **New here? Read the [full documentation in `docs/`](docs/README.md)** —
+> getting-started guide, per-tab tutorials, architecture (with diagrams), and the
+> business value story.
+
 A Material 3, business-professional Streamlit UI that lets you discover the agents
 in your Microsoft Foundry project and chat with a selected agent. Multi-agent
 execution is powered by the **Microsoft Agent Framework**; agent discovery uses the
