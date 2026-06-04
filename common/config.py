@@ -34,6 +34,7 @@ class Settings:
     judge_is_reasoning: bool
     eval_dataset_path: str
     eval_agent_dataset_path: str
+    assert_target_agent: str = "rfpagent"
     subscription_id: str = ""
     resource_group: str = ""
     project_name: str = ""
@@ -113,6 +114,7 @@ def get_settings() -> Settings:
         judge_is_reasoning=judge_is_reasoning,
         eval_dataset_path=eval_dataset_path,
         eval_agent_dataset_path=eval_agent_dataset_path,
+        assert_target_agent=_clean(os.getenv("ASSERT_TARGET_AGENT")) or "rfpagent",
         subscription_id=_clean(os.getenv("AZURE_SUBSCRIPTION_ID")) or "",
         resource_group=_clean(os.getenv("AZURE_RESOURCE_GROUP_NAME")) or "",
         project_name=_clean(os.getenv("AZURE_AI_PROJECT_NAME")) or "",

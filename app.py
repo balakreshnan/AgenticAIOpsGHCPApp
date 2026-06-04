@@ -9,7 +9,7 @@ import streamlit as st
 
 from common.styles import inject_theme
 from common.ui import app_header
-from tabs import chat_tab, evaluations_tab, redteam_tab, tracing_tab
+from tabs import assert_tab, chat_tab, evaluations_tab, redteam_tab, tracing_tab
 
 st.set_page_config(
     page_title="Agentic AIOps Studio",
@@ -21,8 +21,8 @@ st.set_page_config(
 inject_theme()
 app_header()
 
-chat, evals, redteam, tracing = st.tabs(
-    ["💬  Chat", "📊  Evaluations", "🛡️  Red Team", "🔍  Tracing"]
+chat, evals, assert_t, redteam, tracing = st.tabs(
+    ["💬  Chat", "📊  Evaluations", "✅  Assert", "🛡️  Red Team", "🔍  Tracing"]
 )
 
 with chat:
@@ -30,6 +30,9 @@ with chat:
 
 with evals:
     evaluations_tab.render()
+
+with assert_t:
+    assert_tab.render()
 
 with redteam:
     redteam_tab.render()

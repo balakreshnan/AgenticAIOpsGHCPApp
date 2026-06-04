@@ -19,6 +19,9 @@ env/
 *.evaluation.jsonl
 eval_results/
 
+# ASSERT (assert_ai) local artifacts
+.assert_work/
+
 # OS / editor
 .DS_Store
 .vscode/
