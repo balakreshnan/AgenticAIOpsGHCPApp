@@ -15,6 +15,7 @@ from tabs import (
     chat_tab,
     evaluations_tab,
     governance_tab,
+    rampart_tab,
     redteam_tab,
     tracing_tab,
 )
@@ -33,13 +34,14 @@ st.set_page_config(
 inject_theme()
 app_header()
 
-chat, evals, assert_t, governance, redteam, tracing = st.tabs(
+chat, evals, assert_t, governance, redteam, rampart, tracing = st.tabs(
     [
         "💬  Chat",
         "📊  Evaluations",
         "✅  Assert",
         "⚖️  Governance",
         "🛡️  Red Team",
+        "🧪  RAMPART",
         "🔍  Tracing",
     ]
 )
@@ -58,6 +60,9 @@ with governance:
 
 with redteam:
     redteam_tab.render()
+
+with rampart:
+    rampart_tab.render()
 
 with tracing:
     tracing_tab.render()

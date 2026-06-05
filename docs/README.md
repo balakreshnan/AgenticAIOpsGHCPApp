@@ -13,7 +13,7 @@ knowledge of the codebase.
 | Document | What it covers | Read it when… |
 |----------|----------------|---------------|
 | **[getting-started.md](getting-started.md)** | Install, configure, sign in, and run the app for the first time. | You want to get the app running on your machine. |
-| **[tutorials.md](tutorials.md)** | A guided, click-by-click tour of all six tabs (Chat, Evaluations, Assert, Governance, Red Team, Tracing). | You have the app running and want to learn what each feature does. |
+| **[tutorials.md](tutorials.md)** | A guided, click-by-click tour of all seven tabs (Chat, Evaluations, Assert, Governance, Red Team, RAMPART, Tracing). | You have the app running and want to learn what each feature does. |
 | **[architecture.md](architecture.md)** | How the app is built and how data flows — with diagrams and flowcharts. | You want to understand or modify the code. |
 | **[skills.md](skills.md)** | The **mandatory lifecycle standard** — the skills, frameworks, and release gates every agent must pass. | You are building, testing, shipping, or reviewing an agent here. |
 | **[cicd.md](cicd.md)** | The manual CI/CD GitHub Actions workflow that runs the full lifecycle (agent run, evals, ASSERT, red team, governance) with tracing to Foundry. | You want to automate validation/promotion of the agent in CI/CD. |
@@ -32,7 +32,7 @@ behaviour (Assert), check their **governance** posture, **red-team** them for
 safety, and inspect their live **traces** — all from one screen, all secured with
 your own Azure identity.
 
-## 🗺️ The six tabs at a glance
+## 🗺️ The seven tabs at a glance
 
 ```mermaid
 flowchart LR
@@ -42,6 +42,7 @@ flowchart LR
     APP --> A["✅ Assert<br/>Spec-driven testing"]
     APP --> G["⚖️ Governance<br/>Identity and policy checks"]
     APP --> R["🛡️ Red Team<br/>Adversarial attacks"]
+    APP --> RP["🧪 RAMPART<br/>Safety probes"]
     APP --> T["🔍 Tracing<br/>Live telemetry logs"]
     APP <--> F[(Microsoft Foundry<br/>project + rfpagent)]
 ```
@@ -61,6 +62,8 @@ secrets out of the repo and makes every action traceable to a real user.
 - **Azure AI Evaluation SDK** — quality, safety, and red-team scoring.
 - **ASSERT (`assert_ai`)** — turns a plain-English behaviour spec into tests.
 - **Agent Governance Toolkit** — identity, prompt-defense, and policy checks.
+- **RAMPART** — behavioural safety probes (jailbreak / prompt-injection / benign
+  regression) graded deterministically; powers the RAMPART tab and CI step.
 - **Application Insights** — stores the OpenTelemetry traces the Tracing tab reads.
 
 ➡️ **Next:** open **[getting-started.md](getting-started.md)**.

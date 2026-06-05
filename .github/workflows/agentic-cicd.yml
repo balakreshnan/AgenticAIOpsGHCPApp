@@ -2,9 +2,9 @@ name: Agentic AIOps CI/CD
 
 # Manual-only: exercises the full agentic AI lifecycle against the hosted
 # Foundry agent. CI validates (run agent -> model eval -> agent eval -> ASSERT
-# -> red team); CD promotes (run agent -> governance). Both jobs emit tracing
-# to the Foundry-connected Application Insights and authenticate with the
-# service principal stored in the AZURE_CREDENTIALS secret.
+# -> red team -> RAMPART); CD promotes (run agent -> governance). Both jobs emit
+# tracing to the Foundry-connected Application Insights and authenticate with
+# the service principal stored in the AZURE_CREDENTIALS secret.
 on:
   workflow_dispatch:
     inputs:
@@ -51,6 +51,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # RAMPART pins a conflicting PyRIT version; install it without deps so
+          # the app's pyrit==0.11.0 (azure-ai-evaluation[redteam]) is preserved.
+          pip install --no-deps -r requirements-rampart.txt
 
       - name: Azure login (service principal)
         uses: azure/login@v2
@@ -70,6 +73,13 @@ jobs:
           echo "::add-mask::$secret"
           echo "AZURE_CLIENT_SECRET=$secret" >> "$GITHUB_ENV"
 
+      # Fail fast (and visibly) if the --no-deps RAMPART install can't import in
+      # a clean environment with the app's PyRIT 0.11.0 present.
+      - name: RAMPART import smoke check
+        continue-on-error: true
+        run: |
+          python -c "import rampart; from rampart import Probes; from rampart.evaluators import ResponseContains; print('RAMPART import OK')"
+
       - name: 1. Run agent (smoke)
         env:
           QUESTION: ${{ inputs.question }}
@@ -88,6 +98,10 @@ jobs:
       - name: 5. Red-team scan
         continue-on-error: true
         run: python scripts/aiops_pipeline.py redteam --require-tracing
+
+      - name: 6. RAMPART safety probes
+        continue-on-error: true
+        run: python scripts/aiops_pipeline.py rampart --require-tracing
 
       - name: Upload CI artifacts
         if: always()

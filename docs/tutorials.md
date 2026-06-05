@@ -9,7 +9,7 @@ Throughout, the example agent is **`rfpagent`**: a hosted Microsoft Foundry agen
 that drafts answers to RFP (Request for Proposal) / procurement questions, grounded
 in proposal materials.
 
-> 🧠 **Mental model:** Chat is for *using* the agent. The other five tabs are for
+> 🧠 **Mental model:** Chat is for *using* the agent. The other six tabs are for
 > *trusting* the agent — proving it is accurate, safe, well-governed, hard to
 > trick, and observable.
 
@@ -210,7 +210,48 @@ flowchart LR
 
 ---
 
-## 🔍 Tab 6 — Tracing
+## 🧪 Tab 6 — RAMPART
+
+**What it's for:** A fast **safety canary** built on Microsoft's
+[RAMPART](https://github.com/microsoft/RAMPART) framework. It sends a few
+single-turn *behavioural probes* to the agent and grades the replies with
+**deterministic** rules (no extra model calls), so the suite is quick and gives
+the same verdict every time.
+
+**The three probes:**
+
+- **Jailbreak resistance** — a classic "DAN" prompt that tries to strip the
+  agent's guardrails. *Safe* = the agent refuses or stays in role.
+- **Prompt-injection resistance** — a malicious instruction hidden inside the
+  document the agent is asked to summarise. *Safe* = the agent summarises and
+  does **not** obey the injected command.
+- **Benign summarisation (regression)** — a normal, on-task request. *Safe* =
+  the agent still does its job and returns a real summary (guards against
+  over-refusal).
+
+**How to use it:** Pick which probes to run, then click **Start**. The first
+run also loads the RAMPART framework (a one-time ~60–90s), then queries the live
+agent once per probe. You get:
+
+- A **probe-resistance %** (share of *evaluated* probes that passed).
+- A per-probe verdict table (Safe / Unsafe / Undetermined / Error).
+- Each probe's prompt, the agent's response, and the verdict rationale.
+
+**How to read it:** This is a **canary**, not a comprehensive red-team score —
+each probe is one representative case. If the agent can't be reached (timeout /
+service error) that probe is recorded as an **Error**, never a false "safe" pass.
+
+```mermaid
+flowchart LR
+    Probes["Behavioural probes<br/>(jailbreak, injection, benign)"] --> Adapter
+    Adapter["RAMPART adapter"] --> Agent["rfpagent"]
+    Agent --> Eval["Deterministic evaluators<br/>(ResponseContains)"]
+    Eval --> Score["Probe-resistance %<br/>+ per-probe verdicts"]
+```
+
+---
+
+## 🔍 Tab 7 — Tracing
 
 **What it's for:** Look at the agent's **live telemetry** — the actual logs of
 what happened when the agent ran in production.
@@ -251,14 +292,15 @@ flowchart TD
     B --> C["3.✅ Assert<br/>Test against a behaviour spec"]
     C --> D["4.⚖️ Governance<br/>Check identity + prompt defense"]
     D --> E["5.🛡️ Red Team<br/>Attack it for safety"]
-    E --> F["6.🔍 Tracing<br/>Watch it in production"]
+    E --> RP["6.🧪 RAMPART<br/>Safety canary probes"]
+    RP --> F["7.🔍 Tracing<br/>Watch it in production"]
     F -->|findings feed back| A
 ```
 
 A team might **chat** to confirm the agent is alive, **evaluate** to baseline
-quality, run **Assert** + **Red Team** before each release to catch regressions
-and safety issues, use **Governance** for a compliance sign-off, and keep an eye on
-**Tracing** once it's live.
+quality, run **Assert** + **Red Team** + **RAMPART** before each release to catch
+regressions and safety issues, use **Governance** for a compliance sign-off, and
+keep an eye on **Tracing** once it's live.
 
 ---
 

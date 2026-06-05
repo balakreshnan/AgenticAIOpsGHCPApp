@@ -1,0 +1,17 @@
+# Microsoft RAMPART — agentic safety-probe framework (https://github.com/microsoft/RAMPART)
+#
+# Install SEPARATELY and WITHOUT dependencies:
+#
+#     pip install --no-deps -r requirements-rampart.txt
+#
+# Why --no-deps:
+#   RAMPART hard-pins `pyrit==0.13.0`, but this app already ships
+#   `pyrit==0.11.0` via `azure-ai-evaluation[redteam]` (the Red Team tab). The
+#   two pins are mutually exclusive. We only use RAMPART's *deterministic* probe
+#   path (ResponseContains evaluators), which never invokes PyRIT at runtime, so
+#   installing it without deps keeps PyRIT at 0.11.0 and both features work.
+#   RAMPART's remaining runtime deps (jinja2, pyyaml) are listed below and are
+#   already provided by the main requirements; pytest is intentionally omitted.
+RAMPART==0.1.0
+jinja2>=3.1.6
+pyyaml>=6.0.3

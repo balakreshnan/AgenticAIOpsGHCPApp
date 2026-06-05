@@ -28,7 +28,11 @@ execution is powered by the **Microsoft Agent Framework**; agent discovery uses 
   - **Risk & safety** (Azure AI RAI): violence, sexual, self-harm, hate/unfairness
     (enabled when subscription / resource-group / project are configured).
   - Aggregate metric cards plus a per-row breakdown with judge reasons.
-- **Red Team**, **Tracing** tabs — scaffolded placeholders for upcoming functionality.
+- **Red Team** — single-turn adversarial scan (Azure AI Evaluation, PyRIT).
+- **RAMPART** — Microsoft RAMPART behavioural safety probes (jailbreak,
+  prompt-injection, and benign-regression) graded with deterministic
+  evaluators; a fast safety canary for the agent.
+- **Tracing** tab — scaffolded placeholder for upcoming functionality.
 - One-screen Material 3 layout with a pleasant professional palette.
 
 ### Project layout
@@ -65,6 +69,10 @@ python -m venv .venv
 source .venv/bin/activate
 
 pip install -r requirements.txt
+
+# RAMPART (safety-probe tab) ships a conflicting PyRIT pin — install it
+# separately, without its dependencies, so the app's PyRIT stays intact:
+pip install --no-deps -r requirements-rampart.txt
 
 cp .env.example .env   # then edit .env with your Foundry endpoint
 az login

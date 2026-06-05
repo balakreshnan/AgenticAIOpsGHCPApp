@@ -11,6 +11,7 @@ workflow can exercise the full agent lifecycle:
     agent-eval  Agent evaluation (intent / tool-use / task adherence)
     assert      ASSERT behavioural test suite
     redteam     Single-turn adversarial red-team scan
+    rampart     Microsoft RAMPART behavioural safety probes
     governance  Agent governance attestation + policy checks
 
 Every command:
@@ -352,6 +353,62 @@ def cmd_redteam(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rampart(args: argparse.Namespace) -> int:
+    _rule("RAMPART SAFETY PROBES")
+    tracing = _enable_tracing(args)
+    from common import rampart_eval as re
+
+    probe_keys = args.probes.split(",") if args.probes else None
+    run = re.run_rampart(probe_keys)
+    _log(f"Target: {run.target}")
+    _log(
+        f"RAMPART {run.rampart_version} · PyRIT {run.pyrit_version} · "
+        f"pytest installed: {run.pytest_installed}"
+    )
+    _log(
+        f"Probes: {run.total}  Safe: {run.passed}  Unsafe: {run.failed}  "
+        f"Undetermined: {run.undetermined}  Errors: {run.errors}"
+    )
+    if run.resistance_rate is not None:
+        _log(f"Probe resistance (evaluated): {run.resistance_rate:.0%}")
+    for r in run.results:
+        _log(
+            f"  - {r.title} [{r.harm_category}]: {r.status.upper()}"
+            f"{' (agent-call-error)' if r.agent_call_error else ''}"
+        )
+    if run.warning:
+        _log(f"WARNING: {run.warning}")
+    if run.error:
+        _log(f"ERROR: {run.error}")
+
+    _write_artifact(
+        "rampart",
+        {
+            "target": run.target,
+            "rampart_version": run.rampart_version,
+            "pyrit_version": run.pyrit_version,
+            "pytest_installed": run.pytest_installed,
+            "total": run.total,
+            "passed": run.passed,
+            "failed": run.failed,
+            "undetermined": run.undetermined,
+            "errors": run.errors,
+            "agent_call_errors": run.agent_call_errors,
+            "resistance_rate": run.resistance_rate,
+            "results": [_as_dict(r) for r in run.results],
+            "warning": run.warning,
+            "error": run.error,
+            "tracing": tracing,
+        },
+    )
+    if run.error:
+        return 1
+    # Probe verdicts are an informational canary, not a hard build failure
+    # (the workflow step is continue-on-error). Fail only if nothing evaluated.
+    _log("OK: RAMPART probe suite completed.")
+    return 0
+
+
 def cmd_governance(args: argparse.Namespace) -> int:
     _rule("AGENT GOVERNANCE")
     tracing = _enable_tracing(args)
@@ -453,6 +510,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_rt.add_argument("--objectives", type=int, default=1)
     _add_tracing_flag(p_rt)
     p_rt.set_defaults(func=cmd_redteam)
+
+    p_rp = sub.add_parser(
+        "rampart", help="Run Microsoft RAMPART behavioural safety probes."
+    )
+    p_rp.add_argument(
+        "--probes",
+        default="",
+        help="Comma-separated probe keys to run (default: all). Keys: "
+        "jailbreak_resistance, prompt_injection_resistance, benign_summarisation.",
+    )
+    _add_tracing_flag(p_rp)
+    p_rp.set_defaults(func=cmd_rampart)
 
     p_gov = sub.add_parser("governance", help="Run agent governance attestation.")
     p_gov.add_argument("--agent", default=os.getenv("ASSERT_TARGET_AGENT", "rfpagent"))

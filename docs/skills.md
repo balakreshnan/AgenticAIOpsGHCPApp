@@ -8,7 +8,7 @@
 > the same disciplined, auditable lifecycle using the same frameworks.
 
 This document turns the capabilities demonstrated in **Agentic AIOps Studio**
-(Chat → Evaluations → Assert → Governance → Red Team → Tracing) into an
+(Chat → Evaluations → Assert → Governance → Red Team → RAMPART → Tracing) into an
 **enforceable playbook**. If you are adding an agent, a tab, or a new project,
 **you must follow these skills and gates.** Deviations require an explicit,
 written waiver from an approver (see [§9](#9-waivers--exceptions)).
@@ -29,7 +29,8 @@ flowchart LR
     B --> C["3.Spec-test<br/>✅ Assert"]
     C --> D["4.Govern<br/>⚖️ Governance"]
     D --> E["5.Red Team<br/>🛡️ Red Team"]
-    E --> F{"Release<br/>Gate"}
+    E --> RP["5b.Safety probes<br/>🧪 RAMPART"]
+    RP --> F{"Release<br/>Gate"}
     F -- "all green" --> G["🚀 Production"]
     F -- "any red" --> A
     G --> H["6.Observe<br/>🔍 Tracing"]
@@ -55,7 +56,7 @@ that way.
 
 ---
 
-## 3. The six skills (phases)
+## 3. The skills (phases)
 
 Each subsection is a **skill you must demonstrate** before an agent advances.
 
@@ -165,6 +166,30 @@ Each subsection is a **skill you must demonstrate** before an agent advances.
     reach the agent, the ASR is meaningless — say so.
 - **Gate G5:** Overall ASR is at/below the agreed threshold (**lower is better**),
   the scan reached the agent, and results are in Foundry.
+
+### Skill 5b — Behavioural safety probes (🧪 RAMPART)
+
+- **What you must do:** Run a small, **deterministic** behavioural-probe suite as
+  a fast safety *canary* — jailbreak resistance, prompt-injection resistance, and
+  a benign behavioural-regression check.
+- **Framework (mandatory):** **Microsoft RAMPART** (`rampart`), used
+  *programmatically* via `Probes.behavior(...).execute_async(adapter=...)` with
+  **deterministic** evaluators (`ResponseContains` + `~`). Do **not** use the
+  `LLMJudge` / PyRIT-backed attack paths here.
+- **Where:** `common/rampart_target.py` (adapter), `common/rampart_eval.py`
+  (orchestrator → `RampartRun`), `tabs/rampart_tab.py`.
+- **Rules:**
+  - RAMPART pins a **conflicting PyRIT version**; install it `--no-deps`
+    (`requirements-rampart.txt`) so the app's PyRIT (Red Team) stays intact, and
+    only exercise the deterministic probe path.
+  - **Single-turn probes**; isolate the blocking agent call on a worker thread
+    with a **hard timeout** (`asyncio.wait_for`).
+  - An **agent-call failure must be recorded as `error`, never a false `safe`
+    pass** — detect the `[agent-call-error]` marker and override the verdict.
+  - Treat the result as a **canary**, not a comprehensive score; the CI step is
+    `continue-on-error`.
+- **Gate G5b (advisory):** Probes evaluated (not all errored) and no *unsafe*
+  verdict on the jailbreak / injection probes.
 
 ### Skill 6 — Observe in production (🔍 Tracing)
 
@@ -290,6 +315,7 @@ Undocumented deviations are treated as defects.
 | Spec-driven testing | ASSERT (`assert_ai`) | `common/assert_eval.py`, `common/assert_target.py` |
 | Governance | Agent Governance Toolkit | `common/governance.py` |
 | Red teaming | Azure AI Evaluation `RedTeam` (PyRIT) | `common/redteam.py` |
+| Behavioural safety probes | Microsoft RAMPART (deterministic probes, `--no-deps`) | `common/rampart_eval.py`, `common/rampart_target.py` |
 | Observability | Application Insights (REST + KQL) | `common/tracing.py` |
 | Cross-cutting | `DefaultAzureCredential`, content-filter & UTF-8 handling | `common/config.py`, `common/azure_clients.py`, `common/errors.py` |
 
