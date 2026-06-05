@@ -119,7 +119,7 @@ settings:
 
 | Setting | Default | When to change it |
 |---------|---------|-------------------|
-| `AZURE_AI_MODEL_DEPLOYMENT` | `gpt-4o-mini` | If your default model deployment is named differently. |
+| `AZURE_AI_MODEL_DEPLOYMENT` | `gpt-5.4-mini` | If your default model deployment is named differently. |
 | `AZURE_EVAL_JUDGE_MODEL` | same as above | To use a different model as the "judge" for AI-graded metrics. |
 | `AZURE_OPENAI_ENDPOINT` | derived from the project endpoint | Rarely — only if your OpenAI endpoint differs. |
 | `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP_NAME`, `AZURE_AI_PROJECT_NAME` | empty | To unlock the **Risk & Safety** evaluators in the Evaluations tab. |

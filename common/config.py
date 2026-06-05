@@ -141,7 +141,7 @@ def _is_reasoning_model(model: str) -> bool:
 def get_settings() -> Settings:
     """Return cached :class:`Settings` parsed from the environment."""
     project_endpoint = _clean(os.getenv("AZURE_AI_PROJECT_ENDPOINT"))
-    model_deployment = _clean(os.getenv("AZURE_AI_MODEL_DEPLOYMENT")) or "gpt-4o-mini"
+    model_deployment = _clean(os.getenv("AZURE_AI_MODEL_DEPLOYMENT")) or "gpt-5.4-mini"
 
     judge_model = _clean(os.getenv("AZURE_EVAL_JUDGE_MODEL")) or model_deployment
     aoai_endpoint = _clean(os.getenv("AZURE_OPENAI_ENDPOINT")) or _derive_aoai_endpoint(
