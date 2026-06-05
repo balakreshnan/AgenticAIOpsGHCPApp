@@ -219,7 +219,7 @@ def cmd_assert(args: argparse.Namespace) -> int:
     from common import assert_eval as ae
 
     run = ae.run_assert(
-        behavior_name="RFP summarization quality",
+        behavior_name="rfp_summarization_quality",
         behavior_description=(
             "The agent should produce accurate, grounded and well-structured "
             "summaries of RFP documents without hallucinating requirements."
