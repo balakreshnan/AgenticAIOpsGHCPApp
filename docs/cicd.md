@@ -17,8 +17,8 @@ flowchart LR
         A[Run agent<br/>smoke question] --> B[Model eval]
         B --> C[Agent eval]
         C --> D[ASSERT suite]
-        D --> E[Red-team scan]
-        E --> R[RAMPART probes]
+        D --> R[RAMPART probes]
+        R -.optional.-> E[Red-team scan]
     end
     subgraph CD["CD - promote agent"]
         F[Run agent<br/>promotion question] --> G[Governance attestation]
@@ -29,15 +29,17 @@ flowchart LR
 - **CI job** — runs the agent with the question
   *"Summarize RFP for Virgnia Railway express project"*, then **model
   evaluation** and **agent evaluation** over the same datasets used by the
-  Evaluations tab, then the **ASSERT** behavioural suite, then a single-turn
-  **red-team** scan, then the **RAMPART** behavioural safety probes (jailbreak,
-  prompt-injection, benign regression). The ASSERT, red-team and RAMPART steps
-  are `continue-on-error` so an adversarial/non-deterministic result never
-  blocks promotion.
+  Evaluations tab, then the **ASSERT** behavioural suite, then the **RAMPART**
+  behavioural safety probes (jailbreak, prompt-injection, benign regression).
+  The Azure AI Evaluation **red-team** scan is **optional and off by default** —
+  enable it by setting the `run_redteam` input to `true` on manual dispatch.
+  The ASSERT, RAMPART and (optional) red-team steps are `continue-on-error` so an
+  adversarial/non-deterministic result never blocks promotion.
 - **CD job** (`needs: ci`) — re-runs the agent with the same question, then runs
   the **agent-governance toolkit** attestation.
 
-Evaluation and red-team results upload to the Foundry project automatically.
+Evaluation and (when enabled) red-team results upload to the Foundry project
+automatically.
 Every step also enables the **Foundry project's agent tracing** (Microsoft
 Agent Framework OpenTelemetry instrumentation; `--require-tracing` makes a
 failure to enable it fail the step), so both CI and CD agent runs are traced
@@ -47,7 +49,9 @@ required.
 ## Trigger it
 
 Actions → **Agentic AIOps CI/CD** → **Run workflow**. You can override the
-`question` input; it defaults to the RFP summarization prompt.
+`question` input; it defaults to the RFP summarization prompt. Tick the
+`run_redteam` input to additionally run the Azure AI Evaluation red-team scan
+(RAMPART safety probes always run).
 
 ## Authentication
 

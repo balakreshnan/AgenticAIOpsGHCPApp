@@ -2,9 +2,13 @@ name: Agentic AIOps CI/CD
 
 # Manual-only: exercises the full agentic AI lifecycle against the hosted
 # Foundry agent. CI validates (run agent -> model eval -> agent eval -> ASSERT
-# -> red team -> RAMPART); CD promotes (run agent -> governance). Both jobs emit
-# tracing to the Foundry-connected Application Insights and authenticate with
-# the service principal stored in the AZURE_CREDENTIALS secret.
+# -> RAMPART [+ optional red team]); CD promotes (run agent -> governance). Both
+# jobs emit tracing to the Foundry-connected Application Insights and
+# authenticate with the service principal stored in the AZURE_CREDENTIALS secret.
+#
+# Safety testing: RAMPART runs by default. The Azure AI Evaluation red-team scan
+# is OPTIONAL and disabled by default (it is slow and pins an older PyRIT). Set
+# the "run_redteam" input to true on manual dispatch to also run it.
 on:
   workflow_dispatch:
     inputs:
@@ -12,6 +16,11 @@ on:
         description: "Question used for the agent run (CI smoke + CD promotion)."
         required: true
         default: "Summarize RFP for Virgnia Railway express project"
+      run_redteam:
+        description: "Also run the Azure AI Evaluation red-team scan (optional; RAMPART runs by default)."
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -95,13 +104,14 @@ jobs:
         continue-on-error: true
         run: python scripts/aiops_pipeline.py assert --require-tracing
 
-      - name: 5. Red-team scan
-        continue-on-error: true
-        run: python scripts/aiops_pipeline.py redteam --require-tracing
-
-      - name: 6. RAMPART safety probes
+      - name: 5. RAMPART safety probes
         continue-on-error: true
         run: python scripts/aiops_pipeline.py rampart --require-tracing
+
+      - name: 6. Red-team scan (optional)
+        if: ${{ inputs.run_redteam }}
+        continue-on-error: true
+        run: python scripts/aiops_pipeline.py redteam --require-tracing
 
       - name: Upload CI artifacts
         if: always()
