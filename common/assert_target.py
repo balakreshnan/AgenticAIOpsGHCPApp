@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 from typing import Any
 
 from .agents import AgentInfo, list_foundry_agents, run_agent
@@ -31,8 +32,39 @@ from .errors import (
 # same target works for other agents without code changes.
 TARGET_AGENT_NAME = os.getenv("ASSERT_TARGET_AGENT", "rfpagent")
 
+# Marker prefixed to a benign response when the agent call fails for a transient
+# reason (timeout / 5xx / throttling) even after retries. Returning text instead
+# of raising lets ASSERT record the case and keeps the pipeline from crashing.
+TARGET_ERROR_MARKER = "[agent-call-error]"
+
+# Transient failure markers worth retrying (matched case-insensitively).
+_TRANSIENT_MARKERS = (
+    "error code: 408",
+    "error code: 429",
+    "error code: 500",
+    "error code: 503",
+    "error code: 504",
+    "timeout",
+    "timed out",
+    "operation was timeout",
+    "service unavailable",
+    "temporarily unavailable",
+    "connection reset",
+)
+
+# Retry policy for transient agent-call failures inside ASSERT.
+_MAX_ATTEMPTS = int(os.getenv("ASSERT_TARGET_MAX_ATTEMPTS", "3"))
+_RETRY_BASE_DELAY = float(os.getenv("ASSERT_TARGET_RETRY_DELAY", "8"))
+
 _AGENT: AgentInfo | None = None
 _AGENT_LOCK = threading.Lock()
+
+
+def _is_transient(error: str | None) -> bool:
+    if not error:
+        return False
+    low = error.lower()
+    return any(marker in low for marker in _TRANSIENT_MARKERS)
 
 
 def _resolve_agent() -> AgentInfo:
@@ -96,31 +128,57 @@ def chat_sync(message: str, history: list[dict[str, str]] | None = None) -> str:
     ``history`` follows the OpenAI/LiteLLM chat-messages shape (``user`` /
     ``assistant`` only); the current user turn is ``history[-1]`` and is also
     provided as ``message``. Returns the agent's final response text.
+
+    Transient service failures (timeouts, 5xx, throttling) are retried with
+    exponential backoff. If they persist, a benign error marker string is
+    returned instead of raising, so ASSERT still records the case and the
+    pipeline can finish (the judge scores it as a non-answer).
     """
     agent = _resolve_agent()
     prior = _to_prior_history(history)
-    result = _run_in_thread(agent, prior, message)
-    if result is None:
-        raise RuntimeError("Agent returned no result.")
-    error = getattr(result, "error", None)
-    if error:
-        # A content-filter block is an *expected* outcome for adversarial /
-        # jailbreak test prompts: the agent's safety system refused the request.
-        # Rather than crash the whole ASSERT pipeline, return a readable, benign
-        # response so the case is recorded and the judge can score the refusal.
-        if is_content_filter_error(error):
-            info = parse_content_filter(error)
-            where = "prompt"
-            cats = "content policy"
-            if info is not None:
-                where = "prompt" if "prompt" in (info.source or "") else (
-                    info.source or "request"
+
+    last_error: str | None = None
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        result = _run_in_thread(agent, prior, message)
+        if result is None:
+            last_error = "Agent returned no result."
+        else:
+            error = getattr(result, "error", None)
+            if not error:
+                return getattr(result, "text", "") or ""
+
+            # A content-filter block is an *expected* outcome for adversarial /
+            # jailbreak test prompts: the agent's safety system refused the
+            # request. Return a readable, benign response so the case is
+            # recorded and the judge can score the refusal.
+            if is_content_filter_error(error):
+                info = parse_content_filter(error)
+                where = "prompt"
+                cats = "content policy"
+                if info is not None:
+                    where = "prompt" if "prompt" in (info.source or "") else (
+                        info.source or "request"
+                    )
+                    cats = info.category_label
+                return (
+                    f"{CONTENT_FILTER_MARKER} The request was blocked by Azure "
+                    f"OpenAI's content safety filter on the {where} ({cats}); the "
+                    "agent's safety system refused to answer this prompt."
                 )
-                cats = info.category_label
-            return (
-                f"{CONTENT_FILTER_MARKER} The request was blocked by Azure "
-                f"OpenAI's content safety filter on the {where} ({cats}); the "
-                "agent's safety system refused to answer this prompt."
-            )
-        raise RuntimeError(error)
-    return getattr(result, "text", "") or ""
+
+            last_error = error
+            if not _is_transient(error):
+                # Non-transient, non-content-filter failure: don't burn retries.
+                break
+
+        if attempt < _MAX_ATTEMPTS:
+            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+            time.sleep(delay)
+
+    # Exhausted retries (or a hard failure): degrade gracefully instead of
+    # crashing the whole ASSERT pipeline.
+    summary = (last_error or "unknown error").splitlines()[0]
+    return (
+        f"{TARGET_ERROR_MARKER} The agent did not return a response after "
+        f"{_MAX_ATTEMPTS} attempt(s): {summary}"
+    )
