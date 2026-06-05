@@ -6,4 +6,5 @@ agent-framework-foundry>=1.0.0
 azure-ai-evaluation[redteam]>=1.17
 assert-ai>=0.1.0
 agent-governance-toolkit[full]==4.0.0
+azure-monitor-opentelemetry>=1.6
 python-dotenv>=1.0
