@@ -15,6 +15,7 @@ knowledge of the codebase.
 | **[getting-started.md](getting-started.md)** | Install, configure, sign in, and run the app for the first time. | You want to get the app running on your machine. |
 | **[tutorials.md](tutorials.md)** | A guided, click-by-click tour of all six tabs (Chat, Evaluations, Assert, Governance, Red Team, Tracing). | You have the app running and want to learn what each feature does. |
 | **[architecture.md](architecture.md)** | How the app is built and how data flows — with diagrams and flowcharts. | You want to understand or modify the code. |
+| **[skills.md](skills.md)** | The **mandatory lifecycle standard** — the skills, frameworks, and release gates every agent must pass. | You are building, testing, shipping, or reviewing an agent here. |
 | **[business-value.md](business-value.md)** | The business problem, the use cases, and the value/ROI story. | You are explaining *why* this matters to a stakeholder or leader. |
 
 ## 🧭 What is this app, in one paragraph?
