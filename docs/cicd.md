@@ -18,6 +18,7 @@ flowchart LR
         B --> C[Agent eval]
         C --> D[ASSERT suite]
         D --> E[Red-team scan]
+        E --> R[RAMPART probes]
     end
     subgraph CD["CD - promote agent"]
         F[Run agent<br/>promotion question] --> G[Governance attestation]
@@ -29,7 +30,10 @@ flowchart LR
   *"Summarize RFP for Virgnia Railway express project"*, then **model
   evaluation** and **agent evaluation** over the same datasets used by the
   Evaluations tab, then the **ASSERT** behavioural suite, then a single-turn
-  **red-team** scan.
+  **red-team** scan, then the **RAMPART** behavioural safety probes (jailbreak,
+  prompt-injection, benign regression). The ASSERT, red-team and RAMPART steps
+  are `continue-on-error` so an adversarial/non-deterministic result never
+  blocks promotion.
 - **CD job** (`needs: ci`) — re-runs the agent with the same question, then runs
   the **agent-governance toolkit** attestation.
 
@@ -82,8 +86,13 @@ python scripts/aiops_pipeline.py model-eval
 python scripts/aiops_pipeline.py agent-eval
 python scripts/aiops_pipeline.py assert
 python scripts/aiops_pipeline.py redteam
+python scripts/aiops_pipeline.py rampart
 python scripts/aiops_pipeline.py governance
 ```
+
+> The `rampart` command needs the RAMPART package, installed separately with
+> `pip install --no-deps -r requirements-rampart.txt` (it pins a conflicting
+> PyRIT version — see that file for details).
 
 Each command writes a JSON summary to `pipeline-artifacts/` (git-ignored) and
 exits non-zero on genuine failure. Add `--no-tracing` to skip telemetry setup.

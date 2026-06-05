@@ -59,6 +59,11 @@ When it's active, your prompt shows `(.venv)` at the start of the line.
 
 ```bash
 pip install -r requirements.txt
+
+# The RAMPART tab needs the RAMPART framework. It pins a PyRIT version that
+# conflicts with azure-ai-evaluation, so install it WITHOUT dependencies — the
+# app only uses its deterministic probe path, which doesn't need that PyRIT:
+pip install --no-deps -r requirements-rampart.txt
 ```
 
 This pulls in everything the app needs. Here is what each package is for:
@@ -72,6 +77,7 @@ This pulls in everything the app needs. Here is what each package is for:
 | `azure-ai-evaluation[redteam]` | The Evaluations and Red Team tabs. |
 | `assert-ai` | The Assert tab (spec-driven testing). |
 | `agent-governance-toolkit[full]` | The Governance tab. |
+| `RAMPART` *(installed `--no-deps`)* | The RAMPART tab (behavioural safety probes). |
 | `python-dotenv` | Reading your `.env` configuration file. |
 
 > 💡 Installation can take a few minutes — these are large Azure SDKs.
@@ -136,7 +142,7 @@ streamlit run app.py
 ```
 
 Streamlit prints a local URL (usually `http://localhost:8501`) and opens your
-browser. You should see the **Agentic AIOps Studio** header and six tabs.
+browser. You should see the **Agentic AIOps Studio** header and seven tabs.
 
 ---
 

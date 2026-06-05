@@ -7,3 +7,7 @@ azure-ai-evaluation[redteam]>=1.17
 assert-ai>=0.1.0
 agent-governance-toolkit[full]==4.0.0
 python-dotenv>=1.0
+
+# Microsoft RAMPART (safety-probe framework, RAMPART tab) is installed
+# separately because it pins a conflicting PyRIT version. See
+# requirements-rampart.txt — install it with:  pip install --no-deps -r requirements-rampart.txt
