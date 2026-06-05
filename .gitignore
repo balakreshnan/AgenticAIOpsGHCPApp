@@ -25,6 +25,9 @@ eval_results/
 # Red Team (PyRIT) local scan artifacts
 .redteam_work/
 
+# CI/CD pipeline run artifacts
+pipeline-artifacts/
+
 # OS / editor
 .DS_Store
 .vscode/
