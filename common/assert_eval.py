@@ -248,6 +248,10 @@ def _aad_env(settings: Any) -> dict[str, str]:
     env.pop("AZURE_OPENAI_API_KEY", None)
     env["PYTHONIOENCODING"] = "utf-8"
     env["MPLBACKEND"] = "Agg"
+    # ASSERT's LiteLLM client may send params (e.g. reasoning_effort) that some
+    # Azure models reject. Tell LiteLLM to drop unsupported params instead of
+    # failing the request.
+    env["LITELLM_DROP_PARAMS"] = "True"
     env["ASSERT_TARGET_AGENT"] = settings.assert_target_agent
     return env
 

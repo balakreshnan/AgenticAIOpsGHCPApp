@@ -61,7 +61,7 @@ Create the following **repository secrets**:
 | --- | --- |
 | `AZURE_CREDENTIALS` | Service-principal JSON (`clientId`, `clientSecret`, `tenantId`, `subscriptionId`). |
 | `AZURE_AI_PROJECT_ENDPOINT` | Foundry project endpoint (required). |
-| `AZURE_AI_MODEL_DEPLOYMENT` | Chat model deployment (optional; defaults to `gpt-4o-mini`). |
+| `AZURE_AI_MODEL_DEPLOYMENT` | Chat model deployment (optional; defaults to `gpt-5.4-mini`). |
 | `AZURE_EVAL_JUDGE_MODEL` | Judge model for ASSERT / quality metrics (optional). |
 | `AZURE_OPENAI_ENDPOINT` | AOAI endpoint (optional; derived when omitted). |
 | `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP_NAME`, `AZURE_AI_PROJECT_NAME` | Needed for Risk & Safety evaluators and red-team upload. |

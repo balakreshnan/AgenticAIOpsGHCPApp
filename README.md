@@ -74,7 +74,7 @@ Set in `.env`:
 
 - `AZURE_AI_PROJECT_ENDPOINT` — your Foundry project endpoint, e.g.
   `https://<resource>.services.ai.azure.com/api/projects/<project>`
-- `AZURE_AI_MODEL_DEPLOYMENT` — default model deployment (e.g. `gpt-4o-mini`)
+- `AZURE_AI_MODEL_DEPLOYMENT` — default model deployment (e.g. `gpt-5.4-mini`)
 
 For the **Evaluations** tab (optional — sensible defaults are derived):
 
