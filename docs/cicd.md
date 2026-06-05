@@ -34,10 +34,11 @@ flowchart LR
   the **agent-governance toolkit** attestation.
 
 Evaluation and red-team results upload to the Foundry project automatically.
-Every step also enables **OpenTelemetry tracing** exported to the project's
-connected Application Insights (`--require-tracing` makes a missing telemetry
-resource fail the step), so both CI and CD runs are traced and logged in
-Foundry for auditing.
+Every step also enables the **Foundry project's agent tracing** (Microsoft
+Agent Framework OpenTelemetry instrumentation; `--require-tracing` makes a
+failure to enable it fail the step), so both CI and CD agent runs are traced
+and logged in Foundry for auditing — no separate Azure Monitor resource
+required.
 
 ## Trigger it
 
