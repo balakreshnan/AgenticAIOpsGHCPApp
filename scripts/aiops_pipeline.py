@@ -63,6 +63,51 @@ def _rule(title: str) -> None:
     _log("=" * 72)
 
 
+# Markers of a transient service-side failure worth retrying (Foundry / AOAI
+# occasionally returns 500s under load). Matched case-insensitively against the
+# error string returned by run_agent.
+_TRANSIENT_MARKERS = (
+    "server_error",
+    "internalservererror",
+    "error code: 500",
+    "error code: 503",
+    "error code: 429",
+    "service unavailable",
+    "timeout",
+    "timed out",
+    "connection reset",
+    "temporarily unavailable",
+)
+
+
+def _is_transient(error: str | None) -> bool:
+    if not error:
+        return False
+    low = error.lower()
+    return any(marker in low for marker in _TRANSIENT_MARKERS)
+
+
+def _run_agent_with_retries(agent, question: str, *, attempts: int, base_delay: float):
+    """Run the agent, retrying transient server errors with exponential backoff."""
+    import time
+
+    from common.agents import run_agent
+
+    result = None
+    for attempt in range(1, attempts + 1):
+        result = run_agent(agent, [], question)
+        if not result.error or not _is_transient(result.error):
+            return result
+        if attempt < attempts:
+            delay = base_delay * (2 ** (attempt - 1))
+            _log(
+                f"[retry] transient error on attempt {attempt}/{attempts}; "
+                f"retrying in {delay:.0f}s ... ({result.error.splitlines()[0]})"
+            )
+            time.sleep(delay)
+    return result
+
+
 def _write_artifact(name: str, payload: dict[str, Any]) -> None:
     _ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {"generated_at": datetime.now(timezone.utc).isoformat(), **payload}
@@ -111,11 +156,12 @@ def _resolve_agent(agent_name: str):
 def cmd_run_agent(args: argparse.Namespace) -> int:
     _rule(f"RUN AGENT - {args.agent}")
     tracing = _enable_tracing(args)
-    from common.agents import run_agent
 
     agent = _resolve_agent(args.agent)
     _log(f"Question: {args.question}")
-    result = run_agent(agent, [], args.question)
+    result = _run_agent_with_retries(
+        agent, args.question, attempts=args.attempts, base_delay=args.retry_delay
+    )
 
     text = (result.text or "").strip()
     if result.error:
@@ -374,6 +420,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_run = sub.add_parser("run-agent", help="Run the hosted agent against a question.")
     p_run.add_argument("--agent", default=os.getenv("ASSERT_TARGET_AGENT", "rfpagent"))
     p_run.add_argument("--question", default=DEFAULT_QUESTION)
+    p_run.add_argument(
+        "--attempts",
+        type=int,
+        default=4,
+        help="Max attempts on transient (5xx/429/timeout) service errors.",
+    )
+    p_run.add_argument(
+        "--retry-delay",
+        type=float,
+        default=10.0,
+        help="Base seconds for exponential backoff between retries.",
+    )
     _add_tracing_flag(p_run)
     p_run.set_defaults(func=cmd_run_agent)
 
